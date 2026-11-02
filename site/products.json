@@ -1,0 +1,85 @@
+{
+  "_source": "Microsoft Learn: Product IDs supported by the Office Deployment Tool; Office LTSC 2024/2021 and Office 2019 deployment overviews.",
+  "versions": [
+    {
+      "version": "2024",
+      "name": "Office LTSC 2024",
+      "channel": "PerpetualVL2024",
+      "products": {
+        "ProPlus": "ProPlus2024Volume",
+        "Standard": "Standard2024Volume",
+        "Visio": "VisioPro2024Volume",
+        "Project": "ProjectPro2024Volume"
+      },
+      "apps": [
+        "Access",
+        "Excel",
+        "OneNote",
+        "Outlook",
+        "PowerPoint",
+        "Word",
+        "Lync",
+        "OneDrive"
+      ]
+    },
+    {
+      "version": "2021",
+      "name": "Office LTSC 2021",
+      "channel": "PerpetualVL2021",
+      "products": {
+        "ProPlus": "ProPlus2021Volume",
+        "Standard": "Standard2021Volume",
+        "Visio": "VisioPro2021Volume",
+        "Project": "ProjectPro2021Volume"
+      },
+      "apps": [
+        "Access",
+        "Excel",
+        "OneNote",
+        "Outlook",
+        "PowerPoint",
+        "Publisher",
+        "Word",
+        "Lync",
+        "OneDrive",
+        "Teams"
+      ]
+    },
+    {
+      "version": "2019",
+      "name": "Office 2019 (Volume)",
+      "channel": "PerpetualVL2019",
+      "products": {
+        "ProPlus": "ProPlus2019Volume",
+        "Standard": "Standard2019Volume",
+        "Visio": "VisioPro2019Volume",
+        "Project": "ProjectPro2019Volume"
+      },
+      "apps": [
+        "Access",
+        "Excel",
+        "OneNote",
+        "Outlook",
+        "PowerPoint",
+        "Publisher",
+        "Word",
+        "Lync",
+        "OneDrive"
+      ]
+    }
+  ],
+  "excludeApps": [
+    "Access",
+    "Excel",
+    "Groove",
+    "Lync",
+    "OneDrive",
+    "OneNote",
+    "Outlook",
+    "OutlookForWindows",
+    "PowerPoint",
+    "Publisher",
+    "Teams",
+    "Word"
+  ]
+}

@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ASCII / BOM check
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes('src/install.ps1')
+          if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { throw 'src/install.ps1 starts with a UTF-8 BOM.' }
+          $bad = @()
+          for ($i = 0; $i -lt $bytes.Length; $i++) { if ($bytes[$i] -gt 0x7F) { $bad += $i } }
+          if ($bad.Count) { throw ("src/install.ps1 has {0} non-ASCII byte(s), first at offset {1}." -f $bad.Count, $bad[0]) }
+          Write-Host 'OK: pure ASCII, no BOM.'
+
+      - name: Parse test (PowerShell 7)
+        shell: pwsh
+        run: |
+          $null = [scriptblock]::Create((Get-Content src/install.ps1 -Raw))
+          Write-Host 'OK: parses.'
+
+      - name: Parse test (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $null = [scriptblock]::Create((Get-Content src/install.ps1 -Raw))
+          Write-Host "OK: parses in $($PSVersionTable.PSVersion)."
+
+      - name: Validate JSON
+        shell: pwsh
+        run: |
+          $null = Get-Content site/languages.json -Raw -Encoding UTF8 | ConvertFrom-Json
+          $null = Get-Content site/products.json -Raw -Encoding UTF8 | ConvertFrom-Json
+          Write-Host 'OK: JSON is valid.'
+
+      - name: Install modules
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $r = Invoke-ScriptAnalyzer -Path src/install.ps1 -Severity Warning, Error -ExcludeRule PSAvoidUsingWriteHost
+          if ($r) {
+            $r | Format-Table RuleName, Severity, Line, Message -AutoSize -Wrap | Out-String -Width 400 | Write-Host
+            throw "PSScriptAnalyzer reported $(@($r).Count) issue(s)."
+          }
+          Write-Host 'OK: PSScriptAnalyzer clean.'
+
+      - name: Pester (PowerShell 7)
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.5.0
+          $c = New-PesterConfiguration
+          $c.Run.Path = 'tests'
+          $c.Run.Exit = $true
+          $c.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $c
+
+      - name: Pester (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Import-Module Pester -MinimumVersion 5.5.0
+          $c = New-PesterConfiguration
+          $c.Run.Path = 'tests'
+          $c.Run.Exit = $true
+          $c.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $c

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office LTSC Installer</title>
+  <meta name="description" content="أداة مستقلة لتثبيت Office LTSC الرسمي (2024 / 2021 / 2019) بأي لغة عبر أداة النشر الرسمية من Microsoft.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+</head>
+<body>
+  <a class="skip" href="#builder" data-i18n="skip">انتقل إلى المنشئ</a>
+
+  <header class="top">
+    <div class="wrap top-row">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M10 17l4 4 8-10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Office LTSC Installer</span>
+      </div>
+      <button id="langToggle" class="ghost" type="button" aria-label="Switch language">English</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1 data-i18n="heroTitle">ثبّت Office LTSC الرسمي بأي لغة، بأمر واحد</h1>
+      <p class="lead" data-i18n="heroLead">اختر الإصدار واللغة والبرامج، ثم انسخ أمر PowerShell. يُنزَّل Office مباشرة من خوادم Microsoft باستخدام أداة النشر الرسمية (ODT) بعد التحقق من توقيعها الرقمي.</p>
+      <div class="quick">
+        <div class="quick-label" data-i18n="quickLabel">الطريقة الأسرع (قائمة تفاعلية):</div>
+        <div class="code-row">
+          <code id="cmdSimple" dir="ltr"></code>
+          <button class="copy" type="button" data-copy="cmdSimple" data-i18n="copy">نسخ</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="builder" class="card" aria-labelledby="builderTitle">
+      <h2 id="builderTitle" data-i18n="builderTitle">منشئ الأمر</h2>
+      <form id="form" autocomplete="off" onsubmit="return false">
+
+        <fieldset>
+          <legend data-i18n="version">الإصدار</legend>
+          <div class="seg" id="versionGroup"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="language">اللغة</legend>
+          <input id="langSearch" type="search" class="input" data-i18n-ph="langSearch" placeholder="ابحث بالاسم أو الرمز… (عربي، arab، fr-fr)">
+          <select id="langSelect" class="input" size="7" aria-label="Language"></select>
+          <div class="row-between">
+            <span class="hint"><span data-i18n="primary">اللغة الأساسية:</span> <b id="langPrimary" dir="ltr"></b></span>
+            <span class="btns">
+              <button id="setMain" type="button" class="ghost small" data-i18n="setMain">اجعلها الأساسية</button>
+              <button id="addExtra" type="button" class="ghost small" data-i18n="addExtra">+ أضف كلغة إضافية</button>
+            </span>
+          </div>
+          <div id="extraChips" class="chips" aria-live="polite"></div>
+        </fieldset>
+
+        <div class="grid2">
+          <fieldset>
+            <legend data-i18n="arch">المعمارية</legend>
+            <div class="seg">
+              <label><input type="radio" name="arch" value="64" checked><span>64-bit</span></label>
+              <label><input type="radio" name="arch" value="32"><span>32-bit</span></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="edition">النسخة</legend>
+            <div class="seg">
+              <label><input type="radio" name="edition" value="ProPlus" checked><span>Professional Plus</span></label>
+              <label><input type="radio" name="edition" value="Standard"><span>Standard</span></label>
+            </div>
+          </fieldset>
+        </div>
+
+        <fieldset>
+          <legend data-i18n="addons">برامج إضافية</legend>
+          <label class="check"><input type="checkbox" id="visio"><span>Visio Professional</span></label>
+          <label class="check"><input type="checkbox" id="project"><span>Project Professional</span></label>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="exclude">استثناء برامج (لن تُثبَّت)</legend>
+          <div id="appsGroup" class="apps"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="existing">Office المثبّت حاليًا</legend>
+          <select id="remove" class="input">
+            <option value="none" data-i18n="rmNone">إبقاؤه كما هو</option>
+            <option value="odt" data-i18n="rmOdt">إزالته بأداة Microsoft قبل التثبيت</option>
+            <option value="scrub" data-i18n="rmScrub">تنظيف عميق (OfficeScrubber) ثم الإزالة</option>
+          </select>
+          <p id="removeWarn" class="warn" hidden></p>
+        </fieldset>
+
+        <details class="adv">
+          <summary data-i18n="advanced">خيارات متقدمة</summary>
+          <label class="check"><input type="checkbox" id="noUpdates"><span data-i18n="noUpdates">تعطيل التحديثات التلقائية</span></label>
+          <label class="check"><input type="checkbox" id="silent"><span data-i18n="silent">تثبيت صامت (بدون واجهة Office)</span></label>
+          <label class="check"><input type="checkbox" id="downloadOnly"><span data-i18n="downloadOnly">تنزيل فقط إلى مجلد (للتثبيت دون إنترنت)</span></label>
+          <input id="sourcePath" class="input" dir="ltr" type="text" placeholder="D:\OfficeSource" hidden>
+        </details>
+      </form>
+
+      <div class="out">
+        <div class="out-head">
+          <h3 data-i18n="yourCmd">أمرك الجاهز</h3>
+          <button class="copy" type="button" data-copy="cmdCustom" data-i18n="copy">نسخ</button>
+        </div>
+        <pre class="code" dir="ltr"><code id="cmdCustom"></code></pre>
+        <p class="note" data-i18n="keyNote">🔑 مفتاح المنتج لا يوضع في الأمر أبدًا. شغّل الأمر البسيط أعلاه وسيطلب منك السكربت المفتاح بشكل مخفي، أو أضف ‎-ProductKey بنفسك داخل نافذة PowerShell.</p>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="howTitle">
+      <h2 id="howTitle" data-i18n="howTitle">طريقة التشغيل</h2>
+      <ol class="steps">
+        <li data-i18n="how1">انقر بزر الفأرة الأيمن على زر «ابدأ» واختر «Terminal (Admin)» أو «Windows PowerShell (Admin)».</li>
+        <li data-i18n="how2">الصق الأمر واضغط Enter.</li>
+        <li data-i18n="how3">إذا لم تكن النافذة بصلاحيات المسؤول، سيفتح السكربت نافذة جديدة بصلاحيات المسؤول بعد موافقتك.</li>
+        <li data-i18n="how4">انتظر حتى ينتهي التثبيت. يُحفظ سجل كامل على سطح المكتب باسم OfficeLTSC_Install_Log.txt.</li>
+      </ol>
+    </section>
+
+    <section class="card" aria-labelledby="offTitle">
+      <h2 id="offTitle" data-i18n="offTitle">تثبيت دون إنترنت</h2>
+      <p data-i18n="offText">نزّل ملفات Office مرة واحدة إلى مجلد، ثم انسخه إلى أي جهاز (أو انسخه على قرص/ISO) وثبّت منه:</p>
+      <pre class="code" dir="ltr"><code id="cmdOffline"></code></pre>
+      <p data-i18n="offText2">داخل المجلد ستجد setup.exe وconfiguration.xml. على الجهاز الآخر شغّل من نافذة مسؤول داخل المجلد:</p>
+      <pre class="code" dir="ltr"><code>.\setup.exe /configure configuration.xml</code></pre>
+    </section>
+
+    <section class="card" aria-labelledby="verTitle">
+      <h2 id="verTitle" data-i18n="verTitle">تحقق من السكربت</h2>
+      <p data-i18n="verText">بصمة SHA-256 للنسخة المنشورة حاليًا من install.ps1:</p>
+      <pre class="code hash" dir="ltr"><code id="sha">{{SCRIPT_SHA256}}</code></pre>
+      <p data-i18n="verText2">نزّل الملف وقارن البصمة والتوقيع الرقمي:</p>
+      <pre class="code" dir="ltr"><code id="cmdVerify"></code></pre>
+      <ul class="links">
+        <li><a id="lnkSource" href="https://github.com/q123qrc-source/q123qrc-source.github.io/blob/main/src/install.ps1" data-i18n="viewSource">عرض الكود المصدري منسقًا على GitHub</a></li>
+        <li><a href="https://github.com/q123qrc-source/q123qrc-source.github.io/blob/main/SECURITY.md" data-i18n="viewSecurity">ما الذي ينزّله السكربت وكيف يتحقق منه</a></li>
+      </ul>
+      <p class="hint" data-i18n="cacheNote">ملاحظة: قد يستغرق ظهور تحديث جديد للسكربت حتى 10 دقائق بسبب التخزين المؤقت في GitHub Pages.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p data-i18n="footer">أداة مستقلة، غير تابعة لـ Microsoft. يُنزَّل Office مباشرة من خوادم Microsoft. Microsoft وOffice علامتان تجاريتان لشركة Microsoft.</p>
+      <p><a href="https://github.com/q123qrc-source/q123qrc-source.github.io" data-i18n="repo">المستودع المصدري</a></p>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="assets/app.js"></script>
+</body>
+</html>

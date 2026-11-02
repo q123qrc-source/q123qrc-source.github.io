@@ -1,0 +1,137 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site
+        shell: pwsh
+        run: |
+          if (Test-Path _site) { Remove-Item _site -Recurse -Force }
+          Copy-Item site _site -Recurse
+          New-Item -ItemType Directory _site/ps -Force | Out-Null
+          Copy-Item src/install.ps1 _site/install.ps1
+
+      - name: Sign install.ps1 (optional)
+        shell: pwsh
+        env:
+          CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
+          CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
+          CODESIGN_TIMESTAMP_URL: ${{ vars.CODESIGN_TIMESTAMP_URL }}
+        run: |
+          if (-not $env:CODESIGN_PFX_BASE64) {
+            Write-Host '::warning::CODESIGN_PFX_BASE64 secret not set - publishing an unsigned script.'
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [System.IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CODESIGN_PFX_BASE64))
+          try {
+            $pw = ConvertTo-SecureString $env:CODESIGN_PFX_PASSWORD -AsPlainText -Force
+            $cert = Get-PfxCertificate -FilePath $pfx -Password $pw
+            $ts = if ($env:CODESIGN_TIMESTAMP_URL) { $env:CODESIGN_TIMESTAMP_URL } else { 'http://timestamp.digicert.com' }
+            $sig = Set-AuthenticodeSignature -FilePath _site/install.ps1 -Certificate $cert -HashAlgorithm SHA256 -TimestampServer $ts -IncludeChain NotRoot
+            if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'UnknownError') { throw "Signing failed: $($sig.Status) $($sig.StatusMessage)" }
+            Write-Host "Signed by: $($cert.Subject)  status: $($sig.Status) ($($sig.StatusMessage))"
+          } finally {
+            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Copies, hash, .nojekyll
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes('_site/install.ps1')
+          foreach ($b in $bytes) { if ($b -gt 0x7F) { throw 'Published script is not pure ASCII.' } }
+          [System.IO.File]::WriteAllBytes('_site/ps/index.html', $bytes)
+          [System.IO.File]::WriteAllBytes('_site/install.txt', $bytes)
+          $hash = (Get-FileHash _site/install.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText('_site/install.ps1.sha256', "$hash  install.ps1`n")
+          $index = [System.IO.File]::ReadAllText('_site/index.html', [System.Text.Encoding]::UTF8)
+          if ($index -notmatch '\{\{SCRIPT_SHA256\}\}') { throw 'index.html has no {{SCRIPT_SHA256}} placeholder.' }
+          $index = $index.Replace('{{SCRIPT_SHA256}}', $hash)
+          [System.IO.File]::WriteAllText('_site/index.html', $index, (New-Object System.Text.UTF8Encoding $false))
+          New-Item -ItemType File _site/.nojekyll -Force | Out-Null
+          Write-Host "install.ps1 SHA-256: $hash"
+          Get-ChildItem _site -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: _site
+          include-hidden-files: true
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  smoke:
+    # Fetches the published script like a user would. It never runs the installer.
+    needs: deploy
+    runs-on: windows-latest
+    steps:
+      - name: irm /ps in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $base = 'https://q123qrc-source.github.io'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $expected = ''
+          for ($i = 1; $i -le 20; $i++) {
+            $expected = ((Invoke-RestMethod "$base/install.ps1.sha256?cb=$i").ToString().Split(' ')[0]).Trim()
+            $text = Invoke-RestMethod "$base/ps?cb=$i"
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            $actual = -join ($sha.ComputeHash([System.Text.Encoding]::ASCII.GetBytes([string]$text)) | ForEach-Object { $_.ToString('x2') })
+            if ($actual -eq $expected) { break }
+            Write-Host "Attempt ${i}: hash $actual != $expected (cache?), waiting 30s"
+            Start-Sleep -Seconds 30
+          }
+          if ($actual -ne $expected) { throw '/ps does not match the published hash.' }
+          if ($text -isnot [string]) { throw "/ps returned $($text.GetType().FullName), not a string." }
+          $null = [scriptblock]::Create($text)
+          $txt = Invoke-RestMethod "$base/install.txt"
+          if ($txt -ne $text) { throw '/install.txt differs from /ps.' }
+          $ps1 = Invoke-RestMethod "$base/install.ps1"
+          Write-Host "/install.ps1 returns: $($ps1.GetType().FullName)"
+          Write-Host "OK (PS $($PSVersionTable.PSVersion)): /ps matches $expected and parses."
+
+      - name: irm /ps in PowerShell 7
+        shell: pwsh
+        run: |
+          $base = 'https://q123qrc-source.github.io'
+          $expected = ((Invoke-RestMethod "$base/install.ps1.sha256").ToString().Split(' ')[0]).Trim()
+          $text = Invoke-RestMethod "$base/ps"
+          $actual = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::ASCII.GetBytes([string]$text))) -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "/ps hash $actual != $expected" }
+          $null = [scriptblock]::Create($text)
+          $ps1 = Invoke-RestMethod "$base/install.ps1"
+          Write-Host "/install.ps1 returns: $($ps1.GetType().FullName)"
+          Write-Host "OK (PS $($PSVersionTable.PSVersion))."

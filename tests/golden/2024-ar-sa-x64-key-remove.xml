@@ -1,0 +1,14 @@
+<Configuration>
+  <Remove All="TRUE" />
+  <Add OfficeClientEdition="64" Channel="PerpetualVL2024" AllowCdnFallback="TRUE">
+    <Product ID="ProPlus2024Volume" PIDKEY="NMMKJ-6RK4F-KMJVX-8D9MJ-6MWKP">
+      <Language ID="ar-sa" />
+      <ExcludeApp ID="Lync" />
+    </Product>
+  </Add>
+  <RemoveMSI />
+  <Property Name="AUTOACTIVATE" Value="1" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
+  <Updates Enabled="TRUE" />
+  <Display Level="Full" AcceptEULA="TRUE" />
+</Configuration>
