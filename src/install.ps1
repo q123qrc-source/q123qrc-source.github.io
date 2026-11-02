@@ -271,7 +271,7 @@ function Get-LogPath {
     $null
 }
 
-function Write-Log {
+function Write-InstallLog {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)] [AllowEmptyString()] [string] $Message,
@@ -511,7 +511,7 @@ function Get-SelfScriptText {
     }
     # Last resort (e.g. "irm | iex" where the text is not reachable): fetch it again.
     $url = (Get-InstallerConstant).SiteBase + '/install.txt'
-    Write-Log "Re-downloading the script from $url for the elevated window." 'Info'
+    Write-InstallLog "Re-downloading the script from $url for the elevated window." 'Info'
     [string](Invoke-RestMethod -UseBasicParsing -Uri $url)
 }
 
@@ -550,13 +550,13 @@ function Invoke-SelfElevation {
     $argList.Add('-Relaunched')
     $exe = (Get-Process -Id $PID).Path
     if (-not $exe) { $exe = 'powershell.exe' }
-    Write-Log 'Administrator rights are required. Opening an elevated window...' 'Step'
+    Write-InstallLog 'Administrator rights are required. Opening an elevated window...' 'Step'
     try {
         Start-Process -FilePath $exe -Verb RunAs -ArgumentList ($argList -join ' ') | Out-Null
     } catch {
         throw (Get-InstallerError -Code 1 -Message 'Elevation was cancelled (UAC prompt declined).')
     }
-    Write-Log 'Continue in the new Administrator window.' 'Ok'
+    Write-InstallLog 'Continue in the new Administrator window.' 'Ok'
 }
 
 function Read-KeyFile {
@@ -570,7 +570,7 @@ function Read-KeyFile {
         try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
         finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
     } catch {
-        Write-Log 'Could not read the product key handed over from the first window. You will be asked again.' 'Warn'
+        Write-InstallLog 'Could not read the product key handed over from the first window. You will be asked again.' 'Warn'
         return ''
     } finally {
         Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -617,7 +617,7 @@ function Invoke-Download {
             finally { $ProgressPreference = $old }
             if ((Test-Path -LiteralPath $OutFile) -and (Get-Item -LiteralPath $OutFile).Length -gt 0) { return $true }
         } catch {
-            Write-Log ("Download attempt {0}/{1} failed: {2}" -f $i, $Attempts, $_.Exception.Message) 'Warn'
+            Write-InstallLog ("Download attempt {0}/{1} failed: {2}" -f $i, $Attempts, $_.Exception.Message) 'Warn'
         }
         if ($i -lt $Attempts) { Start-Sleep -Seconds (2 * $i) }
     }
@@ -647,7 +647,7 @@ function Wait-ProcessWithSpinner {
     }
     if ($canDraw) { Write-Host '' }
     $Process.WaitForExit()
-    Write-Log ("{0} finished after {1:hh\:mm\:ss}." -f $Activity, $sw.Elapsed) 'Info'
+    Write-InstallLog ("{0} finished after {1:hh\:mm\:ss}." -f $Activity, $sw.Elapsed) 'Info'
     [int]$Process.ExitCode
 }
 
@@ -793,7 +793,7 @@ function Test-Environment {
     [CmdletBinding()]
     param([hashtable] $o)
     $c = Get-InstallerConstant
-    Write-Log 'Checking the system...' 'Step'
+    Write-InstallLog 'Checking the system...' 'Step'
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
         throw (Get-InstallerError -Code 2 -Message 'This script runs on Windows only.')
     }
@@ -804,7 +804,7 @@ function Test-Environment {
     if ($build -lt $c.MinBuild) {
         throw (Get-InstallerError -Code 2 -Message ("Windows 10 1809 / Server 2019 (build {0}) or newer is required. Found build {1}." -f $c.MinBuild, $build))
     }
-    Write-Log ("{0}, build {1}" -f $osName, $build) 'Ok'
+    Write-InstallLog ("{0}, build {1}" -f $osName, $build) 'Ok'
     if ($o.Arch -eq '64' -and -not [Environment]::Is64BitOperatingSystem) {
         throw (Get-InstallerError -Code 2 -Message '64-bit Office needs a 64-bit Windows. Use -Arch 32.')
     }
@@ -815,13 +815,13 @@ function Test-Environment {
     if ($freeGB -lt $c.MinFreeGB) {
         throw (Get-InstallerError -Code 2 -Message ("At least {0} GB free space is needed on {1}. Free: {2} GB." -f $c.MinFreeGB, $drive.Name, $freeGB))
     }
-    Write-Log ("Free space on {0} {1} GB" -f $drive.Name, $freeGB) 'Ok'
+    Write-InstallLog ("Free space on {0} {1} GB" -f $drive.Name, $freeGB) 'Ok'
     if (-not $o.SourcePath -or $o.DownloadOnly) {
         try {
             $old = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
             try { $null = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $c.OdtUrl -TimeoutSec 30 }
             finally { $ProgressPreference = $old }
-            Write-Log 'officecdn.microsoft.com is reachable' 'Ok'
+            Write-InstallLog 'officecdn.microsoft.com is reachable' 'Ok'
         } catch {
             $headError = $_.Exception.Message
             $resolved = $false
@@ -829,19 +829,19 @@ function Test-Environment {
             if (-not $resolved) {
                 throw (Get-InstallerError -Code 2 -Message ("Cannot reach officecdn.microsoft.com: {0}" -f $headError))
             }
-            Write-Log ("Connectivity test was inconclusive ({0}); continuing." -f $headError) 'Warn'
+            Write-InstallLog ("Connectivity test was inconclusive ({0}); continuing." -f $headError) 'Warn'
         }
     }
     $installed = Get-InstalledOfficeInfo
     if ($installed.C2R) {
-        Write-Log ("Installed Click-to-Run Office: {0} ({1})" -f $installed.Products, $installed.Platform) 'Info'
+        Write-InstallLog ("Installed Click-to-Run Office: {0} ({1})" -f $installed.Products, $installed.Platform) 'Info'
         $want = if ($o.Arch -eq '64') { 'x64' } else { 'x86' }
         if ($installed.Platform -and $installed.Platform -ne $want -and -not $o.RemoveExisting) {
-            Write-Log ("Installed Office is {0} but {1} was requested. Setup will fail unless you remove it first (-RemoveExisting)." -f $installed.Platform, $want) 'Warn'
+            Write-InstallLog ("Installed Office is {0} but {1} was requested. Setup will fail unless you remove it first (-RemoveExisting)." -f $installed.Platform, $want) 'Warn'
         }
     }
     if ($installed.Msi -and -not $o.RemoveExisting) {
-        Write-Log 'An MSI-based Office was found. Consider -RemoveExisting to remove it first.' 'Warn'
+        Write-InstallLog 'An MSI-based Office was found. Consider -RemoveExisting to remove it first.' 'Warn'
     }
 }
 
@@ -851,7 +851,7 @@ function Get-VerifiedOdt {
     param([string] $WorkDir)
     $c = Get-InstallerConstant
     $setup = Join-Path $WorkDir 'setup.exe'
-    Write-Log ("Downloading the Office Deployment Tool from {0}" -f $c.OdtUrl) 'Step'
+    Write-InstallLog ("Downloading the Office Deployment Tool from {0}" -f $c.OdtUrl) 'Step'
     if (-not (Invoke-Download -Uri $c.OdtUrl -OutFile $setup)) {
         throw (Get-InstallerError -Code 3 -Message 'Could not download setup.exe from officecdn.microsoft.com.')
     }
@@ -862,7 +862,7 @@ function Get-VerifiedOdt {
         throw (Get-InstallerError -Code 3 -Message ("setup.exe signature check FAILED (status: {0}, signer: {1}). File deleted." -f $sig.Status, $subject))
     }
     $ver = (Get-Item -LiteralPath $setup).VersionInfo.FileVersion
-    Write-Log ("setup.exe {0} - signature Valid, signed by Microsoft Corporation" -f $ver) 'Ok'
+    Write-InstallLog ("setup.exe {0} - signature Valid, signed by Microsoft Corporation" -f $ver) 'Ok'
     $setup
 }
 
@@ -873,7 +873,7 @@ function Invoke-OfficeScrubber {
     $dir = Join-Path $WorkDir 'OfficeScrubber'
     New-Item -ItemType Directory -Path (Join-Path $dir 'bin') -Force | Out-Null
     $base = 'https://raw.githubusercontent.com/abbodi1406/BatUtil/{0}/OfficeScrubber/' -f $c.ScrubberCommit
-    Write-Log ("Downloading OfficeScrubber (abbodi1406/BatUtil @ {0})" -f $c.ScrubberCommit.Substring(0, 12)) 'Step'
+    Write-InstallLog ("Downloading OfficeScrubber (abbodi1406/BatUtil @ {0})" -f $c.ScrubberCommit.Substring(0, 12)) 'Step'
     foreach ($rel in $c.ScrubberFiles.Keys) {
         $out = Join-Path $dir ($rel.Replace('/', '\'))
         if (-not (Invoke-Download -Uri ($base + $rel) -OutFile $out)) {
@@ -885,8 +885,8 @@ function Invoke-OfficeScrubber {
             throw (Get-InstallerError -Code 3 -Message "OfficeScrubber file $rel failed the SHA-256 check. Aborting.")
         }
     }
-    Write-Log 'OfficeScrubber files verified (SHA-256)' 'Ok'
-    Write-Log 'Running OfficeScrubber (Scrub ALL). This can take 10-30 minutes...' 'Step'
+    Write-InstallLog 'OfficeScrubber files verified (SHA-256)' 'Ok'
+    Write-InstallLog 'Running OfficeScrubber (Scrub ALL). This can take 10-30 minutes...' 'Step'
     # Always use the native 64-bit cmd.exe; -wow/-arm/-qedit stop the script from
     # re-launching itself in a detached window so we can wait for it.
     $cmd = Join-Path $env:SystemRoot 'System32\cmd.exe'
@@ -895,16 +895,16 @@ function Invoke-OfficeScrubber {
     $scrubCmd = Join-Path $dir 'OfficeScrubber.cmd'
     $p = Start-Process -FilePath $cmd -ArgumentList ('/c ""' + $scrubCmd + '" /A -wow -arm -qedit"') -WorkingDirectory $dir -PassThru
     $code = Wait-ProcessWithSpinner -Process $p -Activity 'OfficeScrubber'
-    Write-Log ("OfficeScrubber exit code {0}" -f $code) 'Info'
+    Write-InstallLog ("OfficeScrubber exit code {0}" -f $code) 'Info'
 }
 
 function Invoke-Odt {
     [CmdletBinding()]
     [OutputType([int])]
     param([string] $Setup, [string] $ConfigPath, [string] $Mode)
-    Write-Log ("Running setup.exe /{0} configuration.xml" -f $Mode) 'Step'
+    Write-InstallLog ("Running setup.exe /{0} configuration.xml" -f $Mode) 'Step'
     if ($Mode -eq 'configure') {
-        Write-Log 'Office is being downloaded from Microsoft and installed. This usually takes 10-40 minutes.' 'Info'
+        Write-InstallLog 'Office is being downloaded from Microsoft and installed. This usually takes 10-40 minutes.' 'Info'
     }
     $p = Start-Process -FilePath $Setup -ArgumentList ('/{0} "{1}"' -f $Mode, $ConfigPath) -WorkingDirectory (Split-Path $Setup) -PassThru
     Wait-ProcessWithSpinner -Process $p -Activity ("setup.exe /{0}" -f $Mode)
@@ -948,34 +948,37 @@ function Test-Activation {
     [CmdletBinding()]
     [OutputType([bool])]
     param([string] $Key)
-    Write-Log 'Checking activation...' 'Step'
+    Write-InstallLog 'Checking activation...' 'Step'
     $ospp = Get-OsppPath
     if (-not $ospp) {
-        Write-Log 'OSPP.VBS not found; cannot check activation.' 'Warn'
+        Write-InstallLog 'OSPP.VBS not found; cannot check activation.' 'Warn'
         return $false
     }
     $last5 = $Key.Substring($Key.Length - 5)
     $state = Get-ActivationState -Ospp $ospp -Last5 $last5
     if (-not $state.Licensed) {
-        Write-Log 'Not activated yet; asking Office to activate now (OSPP.VBS /act)...' 'Info'
+        Write-InstallLog 'Not activated yet; asking Office to activate now (OSPP.VBS /act)...' 'Info'
         $cscript = Join-Path $env:SystemRoot 'System32\cscript.exe'
         $null = & $cscript //NoLogo $ospp /act 2>&1
         Start-Sleep -Seconds 3
         $state = Get-ActivationState -Ospp $ospp -Last5 $last5
     }
     if ($state.Licensed) {
-        Write-Log ("Activated: {0}" -f $state.Name) 'Ok'
+        Write-InstallLog ("Activated: {0}" -f $state.Name) 'Ok'
         return $true
     }
-    Write-Log ("Not activated. Status: {0}. Error: {1} - {2}" -f $state.Status, $(if ($state.Error) { $state.Error } else { 'n/a' }), (Get-ActivationErrorText $state.Error)) 'Warn'
-    Write-Log ("You can retry later with: cscript ""{0}"" /act" -f $ospp) 'Info'
+    Write-InstallLog ("Not activated. Status: {0}. Error: {1} - {2}" -f $state.Status, $(if ($state.Error) { $state.Error } else { 'n/a' }), (Get-ActivationErrorText $state.Error)) 'Warn'
+    Write-InstallLog ("You can retry later with: cscript ""{0}"" /act" -f $ospp) 'Info'
     $false
 }
 
 function Invoke-Main {
     [CmdletBinding()]
     [OutputType([int])]
-    param([hashtable] $Bound)
+    param(
+        [hashtable] $Bound,
+        [hashtable] $Options
+    )
 
     # Both settings are local to this function (and what it calls), so they do
     # not leak into the caller's session when the script runs through iex.
@@ -992,7 +995,7 @@ function Invoke-Main {
     Write-Host '  Independent tool. Not affiliated with Microsoft.' -ForegroundColor DarkGray
     Write-Host '  Office is downloaded directly from Microsoft servers.' -ForegroundColor DarkGray
     Write-Host ''
-    Write-Log ('==== {0} started (PowerShell {1}) ====' -f $c.ProductName, $PSVersionTable.PSVersion) 'Info'
+    Write-InstallLog ('==== {0} started (PowerShell {1}) ====' -f $c.ProductName, $PSVersionTable.PSVersion) 'Info'
 
     # TLS 1.2 for Windows PowerShell 5.1
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { Write-Verbose 'TLS setting unchanged.' }
@@ -1004,13 +1007,14 @@ function Invoke-Main {
     }
 
     $o = @{
-        Version = $Version; Language = $Language; ExtraLanguages = @(Split-ListValue $ExtraLanguages); Arch = $Arch; Edition = $Edition
-        Visio = [bool]$Visio; Project = [bool]$Project; ExcludeApps = @(Split-ListValue $ExcludeApps); ProductKey = ''
-        RemoveExisting = [bool]$RemoveExisting; Scrub = [bool]$Scrub; SourcePath = $SourcePath; DownloadOnly = [bool]$DownloadOnly
-        NoUpdates = [bool]$NoUpdates; Silent = [bool]$Silent
+        Version = $Options.Version; Language = $Options.Language; ExtraLanguages = @(Split-ListValue $Options.ExtraLanguages)
+        Arch = $Options.Arch; Edition = $Options.Edition; Visio = [bool]$Options.Visio; Project = [bool]$Options.Project
+        ExcludeApps = @(Split-ListValue $Options.ExcludeApps); ProductKey = ''
+        RemoveExisting = [bool]$Options.RemoveExisting; Scrub = [bool]$Options.Scrub; SourcePath = $Options.SourcePath
+        DownloadOnly = [bool]$Options.DownloadOnly; NoUpdates = [bool]$Options.NoUpdates; Silent = [bool]$Options.Silent
     }
-    if ($ProductKey) { $o.ProductKey = ConvertTo-NormalizedKey $ProductKey }
-    elseif ($KeyFile) { $o.ProductKey = ConvertTo-NormalizedKey (Read-KeyFile $KeyFile) }
+    if ($Options.ProductKey) { $o.ProductKey = ConvertTo-NormalizedKey $Options.ProductKey }
+    elseif ($Options.KeyFile) { $o.ProductKey = ConvertTo-NormalizedKey (Read-KeyFile $Options.KeyFile) }
 
     if ($interactive) {
         $o = Read-InteractiveOption -Current $o
@@ -1042,13 +1046,13 @@ function Invoke-Main {
     } elseif ($o.SourcePath) {
         $o.SourcePath = [System.IO.Path]::GetFullPath($o.SourcePath)
         if (-not (Test-Path -LiteralPath (Join-Path $o.SourcePath 'Office\Data'))) {
-            Write-Log ("{0} has no Office\Data folder; ODT will fall back to the Microsoft CDN." -f $o.SourcePath) 'Warn'
+            Write-InstallLog ("{0} has no Office\Data folder; ODT will fall back to the Microsoft CDN." -f $o.SourcePath) 'Warn'
         }
     }
     $catalog = (Get-ProductCatalog)[$o.Version]
 
     Show-Summary -o $o -Catalog $catalog
-    Write-Log ("Options: version={0} lang={1} extra={2} arch={3} edition={4} visio={5} project={6} exclude={7} remove={8} scrub={9} key={10} source={11} downloadOnly={12}" -f `
+    Write-InstallLog ("Options: version={0} lang={1} extra={2} arch={3} edition={4} visio={5} project={6} exclude={7} remove={8} scrub={9} key={10} source={11} downloadOnly={12}" -f `
             $o.Version, $o.Language, ($o.ExtraLanguages -join ','), $o.Arch, $o.Edition, $o.Visio, $o.Project, ($o.ExcludeApps -join ','), $o.RemoveExisting, $o.Scrub, (Get-MaskedKey $o.ProductKey), $o.SourcePath, $o.DownloadOnly) 'Info'
     if ($interactive -and -not (Read-YesNo -Prompt '  Start now?' -Default $true)) {
         throw (Get-InstallerError -Code 1 -Message 'Cancelled by user.')
@@ -1061,7 +1065,7 @@ function Invoke-Main {
     $work = Join-Path $env:TEMP ('OfficeLTSC_' + (Get-Date -Format 'yyyyMMdd_HHmmss'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     $script:WorkDir = $work
-    Write-Log ("Work folder: {0}" -f $work) 'Info'
+    Write-InstallLog ("Work folder: {0}" -f $work) 'Info'
 
     # 5-6. ODT
     $setup = Get-VerifiedOdt -WorkDir $work
@@ -1076,8 +1080,8 @@ function Invoke-Main {
     $configPath = Join-Path $work 'configuration.xml'
     [System.IO.File]::WriteAllText($configPath, $xml, (New-Object System.Text.UTF8Encoding $false))
     $script:ConfigPath = $configPath
-    Write-Log 'configuration.xml:' 'Info'
-    foreach ($line in ($xml -split "`r?`n")) { Write-Log ('  ' + $line) 'Info' }
+    Write-InstallLog 'configuration.xml:' 'Info'
+    foreach ($line in ($xml -split "`r?`n")) { Write-InstallLog ('  ' + $line) 'Info' }
 
     # Optional deep clean
     if ($o.Scrub -and -not $o.DownloadOnly) { Invoke-OfficeScrubber -WorkDir $work }
@@ -1094,18 +1098,18 @@ function Invoke-Main {
         if ($o.ProductKey) { $offline = $offline.Replace($o.ProductKey, '') -replace ' PIDKEY=""', '' }
         $offline = $offline -replace '\s*<Property Name="AUTOACTIVATE" Value="1" />', ''
         [System.IO.File]::WriteAllText((Join-Path $o.SourcePath 'configuration.xml'), $offline, (New-Object System.Text.UTF8Encoding $false))
-        Write-Log ("Office files downloaded to {0}. Install later with: setup.exe /configure configuration.xml (run in that folder)." -f $o.SourcePath) 'Ok'
+        Write-InstallLog ("Office files downloaded to {0}. Install later with: setup.exe /configure configuration.xml (run in that folder)." -f $o.SourcePath) 'Ok'
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
         return 0
     }
-    Write-Log ("Office LTSC {0} installed." -f $o.Version) 'Ok'
+    Write-InstallLog ("Office LTSC {0} installed." -f $o.Version) 'Ok'
 
     # 10. Activation
     $result = 0
     if ($o.ProductKey) {
         if (-not (Test-Activation -Key $o.ProductKey)) { $result = 5 }
     } else {
-        Write-Log 'No product key was given. Enter your key in any Office app (File > Account) to activate.' 'Info'
+        Write-InstallLog 'No product key was given. Enter your key in any Office app (File > Account) to activate.' 'Info'
     }
 
     # 11. Cleanup
@@ -1127,13 +1131,20 @@ $boundCopy = @{}
 $pbp = Get-Variable -Name PSBoundParameters -ValueOnly -ErrorAction SilentlyContinue
 if ($pbp) { foreach ($k in @($pbp.Keys)) { $boundCopy[$k] = $pbp[$k] } }
 try {
-    $exitCode = Invoke-Main -Bound $boundCopy
+    # Script parameters are read here, at top level, and handed to Invoke-Main.
+    $scriptOptions = @{
+        Version = $Version; Language = $Language; ExtraLanguages = $ExtraLanguages; Arch = $Arch; Edition = $Edition
+        Visio = $Visio; Project = $Project; ExcludeApps = $ExcludeApps; ProductKey = $ProductKey
+        RemoveExisting = $RemoveExisting; Scrub = $Scrub; SourcePath = $SourcePath; DownloadOnly = $DownloadOnly
+        NoUpdates = $NoUpdates; Silent = $Silent; KeyFile = $KeyFile
+    }
+    $exitCode = Invoke-Main -Bound $boundCopy -Options $scriptOptions
 } catch {
     $exitCode = 4
     if ($_.Exception.Data.Contains('OfficeLtscExitCode')) { $exitCode = [int]$_.Exception.Data['OfficeLtscExitCode'] }
-    Write-Log $_.Exception.Message 'Error'
+    Write-InstallLog $_.Exception.Message 'Error'
     if ($exitCode -eq 4 -and -not $_.Exception.Data.Contains('OfficeLtscExitCode')) {
-        Write-Log ($_.ScriptStackTrace) 'Info'
+        Write-InstallLog ($_.ScriptStackTrace) 'Info'
     }
     if ($script:WorkDir -and (Test-Path -LiteralPath $script:WorkDir)) {
         if ($script:ConfigPath -and $script:SecretKey -and (Test-Path -LiteralPath $script:ConfigPath)) {
@@ -1141,11 +1152,11 @@ try {
             $t = [System.IO.File]::ReadAllText($script:ConfigPath).Replace($script:SecretKey, (Get-MaskedKey $script:SecretKey))
             [System.IO.File]::WriteAllText($script:ConfigPath, $t)
         }
-        Write-Log ("Work folder kept for troubleshooting: {0}" -f $script:WorkDir) 'Info'
-        Write-Log ("ODT logs: {0}\{1}-*.log and {2}\Temp\{1}-*.log" -f $env:TEMP, $env:COMPUTERNAME, $env:SystemRoot) 'Info'
+        Write-InstallLog ("Work folder kept for troubleshooting: {0}" -f $script:WorkDir) 'Info'
+        Write-InstallLog ("ODT logs: {0}\{1}-*.log and {2}\Temp\{1}-*.log" -f $env:TEMP, $env:COMPUTERNAME, $env:SystemRoot) 'Info'
     }
 } finally {
-    Write-Log ("==== Finished with exit code {0} ====" -f $exitCode) 'Info'
+    Write-InstallLog ("==== Finished with exit code {0} ====" -f $exitCode) 'Info'
     if ($script:LogPath) { Write-Host ("    Log: {0}" -f $script:LogPath) -ForegroundColor DarkGray }
     $script:SecretKey = $null
 }
